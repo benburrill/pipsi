@@ -300,7 +300,7 @@ class Repo(object):
             info['version'] = extract_package_version(venv_path, info['name'])
 
         if 'scripts' not in info:
-            info['scripts'] = find_installed_executables(venv_path)
+            info['scripts'] = list(self.find_installed_executables(venv_path))
 
         return info
 
