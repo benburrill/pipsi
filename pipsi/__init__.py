@@ -262,20 +262,6 @@ class Repo(object):
         except OSError:
             pass
 
-    def get_package_scripts(self, path):
-        """Get the scripts installed for PATH
-
-        Looks for package metadata listing which scripts were
-        installed. If there is no metadata (package was installed
-         with an older version of pipsi) then fall back to the old
-         find_installed_executables method.
-        """
-        info = self.get_package_info(path)
-        if 'scripts' in info:
-            return info['scripts']
-        # No script metadata - fall back to older method of searching for executables
-        return self.find_installed_executables(path)
-
     def link_scripts(self, scripts):
         rv = []
         for script in scripts:
@@ -301,8 +287,22 @@ class Repo(object):
 
     def get_package_info(self, venv_path):
         package_info_file_path = join(venv_path, 'package_info.json')
-        with open(package_info_file_path, 'r') as fh:
-            return json.load(fh)
+        try:
+            with open(package_info_file_path, 'r') as fh:
+                info = json.load(fh)
+        except OSError:
+            info = {}
+
+        if 'name' not in info:
+            info['name'] = os.path.basename(venv_path)
+
+        if 'version' not in info:
+            info['version'] = extract_package_version(venv_path, info['name'])
+
+        if 'scripts' not in info:
+            info['scripts'] = find_installed_executables(venv_path)
+
+        return info
 
     def install(self, package, python=None, editable=False, system_site_packages=False):
         # `python` could be int as major version, or str as absolute bin path,
@@ -384,7 +384,7 @@ class Repo(object):
         if not os.path.isdir(path):
             return UninstallInfo(package, installed=False)
         paths = [path]
-        paths.extend(self.get_package_scripts(path))
+        paths.extend(self.get_package_info(path)['scripts'])
         return UninstallInfo(package, paths)
 
     def upgrade(self, package, editable=False):
@@ -397,7 +397,7 @@ class Repo(object):
 
         from subprocess import Popen
 
-        old_scripts = set(self.get_package_scripts(venv_path))
+        old_scripts = set(self.get_package_info(venv_path)['scripts'])
 
         args = [os.path.join(venv_path, BIN_DIR, 'python'), '-m', 'pip', 'install',
                 '--upgrade']
@@ -432,10 +432,8 @@ class Repo(object):
                 if os.path.isdir(venv_path) and \
                    os.path.isfile(venv_path + python):
                     info = self.get_package_info(venv_path)
-                    version = None
-                    if versions:
-                        version = info.get('version')
-                    venvs[venv] = [info.get('scripts', []), version]
+                    version = info['version'] if versions else None
+                    venvs[info['name']] = [info['scripts'], version]
 
         return sorted(venvs.items())
 
