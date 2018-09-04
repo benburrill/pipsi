@@ -290,7 +290,7 @@ class Repo(object):
         try:
             with open(package_info_file_path, 'r') as fh:
                 info = json.load(fh)
-        except OSError:
+        except (OSError, IOError):
             info = {}
 
         if 'name' not in info:
